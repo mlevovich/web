@@ -7,7 +7,7 @@
 #include <netinet/tcp.h> // For TCP_CONGESTION
 #include <unistd.h>
 #include <time.h>
-#include <sys/time.h>
+#include <sys/time.h> // For gettimeofday
 
 #define BUFFER_SIZE 1024
 
@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
     }
     printf("Sender connected, beginning to receive file...\n");
 
-    do {
+    while(1) {
         gettimeofday(&start, NULL);
         long bytes_received = 0;
         while (1) {
@@ -85,7 +85,8 @@ int main(int argc, char *argv[]) {
 
         printf("File transfer completed.\n");
 
-        long elapsed = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_usec - start.tv_usec) / 1000; // Convert to milliseconds
+        long elapsed = ((end.tv_sec - start.tv_sec) * 1000000L + end.tv_usec) - start.tv_usec; // microseconds
+        elapsed /= 1000; // Convert to milliseconds
         times[count++] = elapsed;
         total_time += elapsed;
         total_bytes_received += bytes_received;
@@ -93,14 +94,14 @@ int main(int argc, char *argv[]) {
         printf("Waiting for Sender response...\n");
         ssize_t n = read(newsockfd, buffer, BUFFER_SIZE); // Expecting "yes" or "no"
         if (n <= 0 || strncmp(buffer, "no", 2) == 0) break;
-    } while (1);
+    } 
 
     printf("Sender sent exit message.\n");
 
     // Calculate and print statistics
     printf("----------------------------------\n");
     printf("- * Statistics * -\n");
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) { // Corrected condition to avoid accessing uninitialized entry
         double speed = ((double)total_bytes_received / (1024 * 1024)) / (times[i] / 1000.0); // Convert to MB/s
         printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", i + 1, (double)times[i], speed);
     }

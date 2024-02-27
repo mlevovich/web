@@ -9,7 +9,7 @@ TCP_Receiver: TCP_Receiver.o
 TCP_Receiver.o: TCP_Receiver.c
 	gcc -Wall -c TCP_Receiver.c
 
-TCP_Sender.o: TCP_Sender.c
+TCP_Sender.o: TCP_Sender.c head.h
 	gcc -Wall -c TCP_Sender.c
 
 .PHONY: clean all
