@@ -29,11 +29,18 @@ void set_congestion_control(int sockfd, const char *algo) {
 
 void gen_and_write(char buffer[1024], int sockfd)
 {
+    const int fileSize = 2097152; 
+    // send first the size of the file
+    if (send(sockfd, &fileSize, sizeof(fileSize), 0) == -1) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
     // Generate and send a file of at least 2MB
-    for (int i = 0; i < 2097152 / sizeof(buffer); i++)
+    for (int i = 0; i < fileSize / BUFFER_SIZE; i++)
     {
-        memset(buffer, 'A', sizeof(buffer));
-        long n = write(sockfd, buffer, sizeof(buffer));
+        memset(buffer, 'A', BUFFER_SIZE);
+        long n = write(sockfd, buffer, BUFFER_SIZE);
         if (n < 0)
         {
             perror("ERROR writing to socket");
@@ -92,6 +99,13 @@ int main(int argc, char *argv[]) {
 
         printf("File sent. Send again? (yes/no): ");
         scanf("%s", buffer);
+
+        long n = write(sockfd, buffer, BUFFER_SIZE);
+        if (n < 0)
+        {
+            perror("ERROR writing to socket");
+            exit(1);
+        }
     } while (strcmp(buffer, "no") != 0); // Step 4: User decision loop
 
     // Step 5: Properly close the socket and clean up

@@ -71,15 +71,19 @@ int main(int argc, char *argv[]) {
         perror("ERROR on accept");
         exit(EXIT_FAILURE);
     }
-    printf("Sender connected, beginning to receive file...\n");
+    printf("Sender connected, beginning to receive file...\n");        
 
     while(1) {
-        gettimeofday(&start, NULL);
-        long bytes_received = 0;
-        while (1) {
-            ssize_t n = read(newsockfd, buffer, BUFFER_SIZE);
-            if (n <= 0) break; // Assuming end of file or error
-            bytes_received += n;
+        gettimeofday(&start, NULL);        
+
+        int bytes_received, total_bytes_received = 0;
+        int file_size;
+        recv(newsockfd, &file_size, sizeof(file_size), 0); // Assuming perfect conditions, which is dangerous
+        
+        while (total_bytes_received < file_size) {
+            bytes_received = recv(newsockfd, buffer, sizeof(buffer), 0);
+            total_bytes_received += bytes_received;
+            if (bytes_received <= 0) break; // Error or connection closed        
         }
         gettimeofday(&end, NULL);
 

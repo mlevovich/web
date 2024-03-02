@@ -1,0 +1,9 @@
+{
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/vboxuser/VisualCodeProjects/networks/ex3/web",
+            "binaryPath": "/home/vboxuser/VisualCodeProjects/networks/ex3/web/TCP_Receiver",
+            "binaryArgs": ["-p", "1234", "-algo", "reno"]
+        }
+    ]
+}
