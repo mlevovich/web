@@ -25,9 +25,12 @@ int main(int argc, char *argv[]) {
     char buffer[BUFFER_SIZE];
     char congestion_control_algo[256] = "reno"; // Default to "reno"
     struct timeval start, end;
-    long times[100]; // Assuming a maximum of 100 sends
+    float times[100]; // Assuming a maximum of 100 sends
+    float speeds[100]; // Assuming a maximum of 100 sends
     int count = 0;
-    long total_time = 0, total_bytes_received = 0;
+    float total_time = 0;
+    float total_all_bytes_packeges = 0;
+    float total_bytes_received = 0;
 
     // Parse command-line arguments
     for (int i = 1; i < argc; i++) {
@@ -76,11 +79,11 @@ int main(int argc, char *argv[]) {
     while(1) {
         gettimeofday(&start, NULL);        
 
-        int bytes_received, total_bytes_received = 0;
+        float bytes_received = 0; // changed to float
         int file_size;
-        recv(newsockfd, &file_size, sizeof(file_size), 0); // Assuming perfect conditions, which is dangerous
+        recv(newsockfd, &file_size, sizeof(file_size), 0); 
         
-        while (total_bytes_received < file_size) {
+        while (total_bytes_received <= file_size) {
             bytes_received = recv(newsockfd, buffer, sizeof(buffer), 0);
             total_bytes_received += bytes_received;
             if (bytes_received <= 0) break; // Error or connection closed        
@@ -89,12 +92,17 @@ int main(int argc, char *argv[]) {
 
         printf("File transfer completed.\n");
 
-        long elapsed = ((end.tv_sec - start.tv_sec) * 1000000L + end.tv_usec) - start.tv_usec; // microseconds
-        elapsed /= 1000; // Convert to milliseconds
-        times[count++] = elapsed;
+        float elapsed = ((end.tv_sec - start.tv_sec) * 1000000.0f + end.tv_usec) - start.tv_usec; // microseconds, changed to float
+        elapsed /= 1000.0f; // Convert to milliseconds, adjusted for float
+        times[count] = elapsed;
         total_time += elapsed;
-        total_bytes_received += bytes_received;
 
+        // Calculate speed
+        float speed = (total_bytes_received / (1024.0f * 1024.0f)) / (elapsed / 1000.0f); // MB/s, changed to float
+
+        speeds[count] = speed;
+        total_all_bytes_packeges += total_bytes_received;
+        count++;
         printf("Waiting for Sender response...\n");
         ssize_t n = read(newsockfd, buffer, BUFFER_SIZE); // Expecting "yes" or "no"
         if (n <= 0 || strncmp(buffer, "no", 2) == 0) break;
@@ -106,12 +114,11 @@ int main(int argc, char *argv[]) {
     printf("----------------------------------\n");
     printf("- * Statistics * -\n");
     for (int i = 0; i < count; i++) { // Corrected condition to avoid accessing uninitialized entry
-        double speed = ((double)total_bytes_received / (1024 * 1024)) / (times[i] / 1000.0); // Convert to MB/s
-        printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", i + 1, (double)times[i], speed);
+        printf("- Run #%d Data: Time=%.2fms; Speed=%.9fMB/s\n", i + 1, (double)times[i], (double)speeds[i]);
     }
     double average_time = (double)total_time / count;
-    double average_speed = ((double)total_bytes_received / (1024 * 1024)) / (total_time / 1000.0) / count; // Convert to MB/s
-    printf("-\n- Average time: %.2fms\n- Average bandwidth: %.2fMB/s\n", average_time, average_speed);
+    double average_speed = (double)total_all_bytes_packeges / (1024.0 * 1024.0) / ((double)total_time / 1000.0); // MB/s 
+    printf("-\n- Average time: %.3fms\n- Average bandwidth: %.3fMB/s\n", average_time, average_speed);
     printf("----------------------------------\n");
     printf("Receiver end.\n");
 
@@ -120,3 +127,5 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
+
