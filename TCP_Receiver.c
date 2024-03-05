@@ -77,13 +77,11 @@ int main(int argc, char *argv[]) {
     printf("Sender connected, beginning to receive file...\n");        
 
     while(1) {
+        float bytes_received = 0; // changed to float
+        total_bytes_received = 0;
         gettimeofday(&start, NULL);        
 
-        float bytes_received = 0; // changed to float
-        int file_size;
-        recv(newsockfd, &file_size, sizeof(file_size), 0); 
-        
-        while (total_bytes_received <= file_size) {
+        while (total_bytes_received <= 2097152) {
             bytes_received = recv(newsockfd, buffer, sizeof(buffer), 0);
             total_bytes_received += bytes_received;
             if (bytes_received <= 0) break; // Error or connection closed        
@@ -102,10 +100,12 @@ int main(int argc, char *argv[]) {
 
         speeds[count] = speed;
         total_all_bytes_packeges += total_bytes_received;
+        printf("run count #%d\n finished", count);
         count++;
-        printf("Waiting for Sender response...\n");
+        
         ssize_t n = read(newsockfd, buffer, BUFFER_SIZE); // Expecting "yes" or "no"
         if (n <= 0 || strncmp(buffer, "no", 2) == 0) break;
+
     } 
 
     printf("Sender sent exit message.\n");
