@@ -14,19 +14,12 @@ int main(int argc, char *argv[]) {
     // fprintf(stderr, "Example: %s -ip 127.0.0.1 -p 12345 myfile.txt\n", progname);
     const char *ip = argv[2];
     int port = atoi(argv[4]);
-    const char *filename = argv[5];
-    
-    // Open the file
-    int file_fd = open(filename, O_RDONLY);
-    if (file_fd < 0) {
-        perror("Failed to open file");
-        exit(EXIT_FAILURE);
-    }
+    const char *filename = argv[5];   
 
     // Create the RUDP socket
     int sockfd = rudp_socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
-        fprintf(stderr, "Failed to create RUDP socket\n");
+        printf("Failed to create RUDP socket\n");
         exit(EXIT_FAILURE);
     }
 
@@ -36,31 +29,50 @@ int main(int argc, char *argv[]) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
     if (inet_pton(AF_INET, ip, &dest_addr.sin_addr) <= 0) {
-        fprintf(stderr, "Invalid IP address format\n");
+        printf("Invalid IP address format\n");
         exit(EXIT_FAILURE);
     }
 
     // Buffer for reading from the file
-    char buffer[RUDP_BUFFER_SIZE*100];
+    char buffer[4194304]; // 4 MB 
     ssize_t read_bytes, sent_bytes;
 
+    printf("Sending the file\n");
+    int keepSending = 0;
     // Send the file in chunks
-    while ((read_bytes = read(file_fd, buffer, sizeof(buffer))) > 0) {        
-        sent_bytes = rudp_send(sockfd, (struct sockaddr *)&dest_addr, sizeof(dest_addr), buffer, read_bytes);
-        printf("Read %zd bytes, Sent %zd bytes\n", read_bytes, sent_bytes);
-        if (sent_bytes < 0) {
-            fprintf(stderr, "Failed to send data\n");
-            break;
+    do {        
+        // Open the file
+        int file_fd = open(filename, O_RDONLY);
+        if (file_fd < 0) {
+            printf("Failed to open file");
+            exit(EXIT_FAILURE);
         }
-    }
 
-    if (read_bytes < 0) {
-        perror("Failed to read from file");
-    }
+        read_bytes = read(file_fd, buffer, sizeof(buffer));
+        // close the file so that it can be reopen in the next loop iteration.
+        close(file_fd);
+        
+        if (read_bytes > 0) {
+            sent_bytes = rudp_send(sockfd, (struct sockaddr *)&dest_addr, sizeof(dest_addr), buffer, read_bytes, 0);
+            
+            if (sent_bytes < 0) {
+                printf("Failed to send data\n");
+                break;
+            }
+        }
 
-    // Close the file and RUDP connection
-    close(file_fd);
+        printf("Do you want to send the file again? (1 - yes, any other character - no): ");
+        scanf("%d", &keepSending);        
+    } while (keepSending == 1);
+
+    // send FIN to indicate the receiver to stop listening.
+    char buf[1];
+    sent_bytes = rudp_send(sockfd, (struct sockaddr *)&dest_addr, sizeof(dest_addr), buf, 1, 1);        
+
+    // Close RUDP connection    
+    printf("Closing the connection\n");
     rudp_close(sockfd);
+    printf("Connection closed\n");
 
     return 0;
 }
