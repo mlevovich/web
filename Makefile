@@ -30,4 +30,4 @@ RUDP_Sender.o: RUDP_Sender.c
 .PHONY: clean all
 
 clean:
-	rm -f *.o TCP_Sender TCP_Receiver
+	rm -f *.o TCP_Sender TCP_Receiver RUDP_Sender RUDP_Receiver
