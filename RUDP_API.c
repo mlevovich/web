@@ -42,7 +42,7 @@ int rudp_socket(int domain, int type, int protocol) {
     tv.tv_sec = ACK_TIMEOUT;
     tv.tv_usec = 0;
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv)) < 0) {
-        perror("Setting socket timeout failed");
+        printf("Setting socket timeout failed");
         exit(EXIT_FAILURE);
     }
 
@@ -67,23 +67,35 @@ int wait_for_ack(int sockfd) {
     return -1; // Timeout or error
 }
 
-ssize_t rudp_send(int sockfd, const struct sockaddr *dest_addr, socklen_t addrlen, const void *buf, size_t len) {
+ssize_t rudp_send(int sockfd, const struct sockaddr *dest_addr, socklen_t addrlen, const void *buf, size_t len, int sendFin) {
     size_t totalSent = 0; // Total bytes sent
     int attempts = 0; // Retransmission attempts
 
     while (totalSent < len) {
-        size_t chunkSize = len - totalSent > MAX_PAYLOAD_SIZE ? MAX_PAYLOAD_SIZE : len - totalSent;
+        size_t chunkSize = (sendFin == 1 || len - totalSent > MAX_PAYLOAD_SIZE) ? MAX_PAYLOAD_SIZE : len - totalSent;
         rudp_packet packet;
 
         // Prepare the packet
         packet.header.length = htons(chunkSize);
-        packet.header.flags = DATA;
+        if (sendFin == 1) {
+            packet.header.flags = FIN;
+        } else {
+            packet.header.flags = DATA;
+            // if we send the last packet, set the FIN flag
+            if ((len - totalSent) <= sizeof(rudp_packet)) {
+                packet.header.flags = packet.header.flags | FIN;
+            }       
+        } 
         packet.header.checksum = 0; // set to zero to calculate checksum
-        memcpy(packet.payload, (char *)buf + totalSent, chunkSize);
+        if (sendFin == 1) {
+            memset(packet.payload, 0, MAX_PAYLOAD_SIZE);
+        } else {
+            memcpy(packet.payload, (char *)buf + totalSent, chunkSize);
+        }
         packet.header.checksum = simple_checksum(&packet, sizeof(rudp_header) + chunkSize);
 
         // Send the packet
-        ssize_t sent = sendto(sockfd, &packet, sizeof(rudp_header) + chunkSize, 0, dest_addr, addrlen);
+        ssize_t sent = sendto(sockfd, &packet, sizeof(rudp_header) + chunkSize, 0, dest_addr, addrlen);        
         if (sent < 0) {
             perror("sendto failed");
             return -1;
@@ -100,8 +112,7 @@ ssize_t rudp_send(int sockfd, const struct sockaddr *dest_addr, socklen_t addrle
                 return -1;
             }
         }
-    }
-
+    }    
     return totalSent;
 }
 
@@ -127,11 +138,12 @@ ssize_t send_ack(int sockfd, const struct sockaddr *dest_addr, socklen_t addrlen
     return sent;
 }
 
-ssize_t rudp_recv(int sockfd, struct sockaddr *src_addr, socklen_t *addrlen, void *buf, size_t len) {
-    char packet[RUDP_BUFFER_SIZE];
+ssize_t rudp_recv(int sockfd, struct sockaddr *src_addr, socklen_t *addrlen, void *buf, size_t len, int *status) {
+    *status = -1;
+    char packet[RUDP_BUFFER_SIZE];    
     ssize_t received = recvfrom(sockfd, packet, sizeof(packet), 0, src_addr, addrlen);
     if (received < 0) {
-        perror("recvfrom failed");
+        printf("recvfrom failed");        
         return -1;
     }
 
@@ -145,13 +157,13 @@ ssize_t rudp_recv(int sockfd, struct sockaddr *src_addr, socklen_t *addrlen, voi
     header->checksum = 0; // Temporarily set to zero to calculate checksum
     uint16_t calculated_checksum = simple_checksum(packet, received);
     if (received_checksum != calculated_checksum) {
-        fprintf(stderr, "Checksum mismatch. Packet corrupted.\n");
+        printf("Checksum mismatch. Packet corrupted.\n");
         return -1;
     }
 
     // If the packet is valid, copy the data to the user buffer
     if (data_len > len) {
-        fprintf(stderr, "Buffer too small to hold received data.\n");
+        printf("Buffer too small to hold received data.\n");
         return -1;
     }
     memcpy(buf, data, data_len);
@@ -161,6 +173,15 @@ ssize_t rudp_recv(int sockfd, struct sockaddr *src_addr, socklen_t *addrlen, voi
         return -1; // Failed to send ACK
     }
 
+    if (header->flags == (DATA | FIN)) {  // last packet
+        *status = 2;
+    } else if (header->flags == DATA) { // data packet, not last
+        *status = 1;
+    } else if (header->flags == FIN) {  // close request
+        *status = -2;
+    } else if (header->flags == ACK) {  // ACK
+        *status = 0;
+    }
     return received; // Return the length of the received data (including the header)
 }
 
